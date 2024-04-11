@@ -2,6 +2,8 @@ import socket
 import threading
 import random
 import time
+import struct
+from server.constant import *
 
 class RacingServer:
     def __init__(self, host, port, max_players, race_length, question_time_limit):
@@ -21,6 +23,7 @@ class RacingServer:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
         self.sock.listen(5)
+        self.sock.settimeout(20)
         self.connected = True
 
         self.last_ping_sent = 0
@@ -29,16 +32,52 @@ class RacingServer:
         self.buf = b""
         print(f"Server running on {self.host}:{self.port}")
 
+    def read_packets(self, data):
+        ## is an index present?
+        if len(data) >= 4:
+            packet_length = struct.unpack("I", data[:4])[0]
+
+            ## whole packet`1 is present
+            if len(data) >= packet_length + 4:
+                packet_buf = data[:4 + packet_length]
+
+                ## read the packet: id, payload
+                packet = (packet_buf[4], packet_buf[5:])
+                print(packet)
+
+            ## move the buffer
+            data = data[4 + packet_length:]
+
+            return [packet, *self.read_packets(data)]
+
+        else:
+            return []
+
+    def is_socket_connected(self,sock: socket.socket):
+        try:
+            # Set the socket to non-blocking mode
+            sock.setblocking(False)
+
+            # Peek into the socket to check for data
+            data = sock.recv(1, socket.MSG_PEEK)
+
+            # If the data is an empty byte string, the socket is not connected
+            return False if data == b'' else True
+        except BlockingIOError:
+            # If the operation will block, set the socket back to blocking mode
+            sock.setblocking(True)
+            return True
+        except (ConnectionResetError, ConnectionError, ConnectionAbortedError):
+            # Handle specific connection-related errors
+            return False
+        finally:
+            # Always set the socket back to blocking mode before returning
+            sock.setblocking(True)
+
     def accept_players(self):
-        while len(self.players) < self.max_players:
+        while True:
             client_sock, client_addr = self.sock.accept()
             nickname = client_sock.recv(1024).decode().strip()
-
-            for player_nickname, (player_socket, _, _) in self.players.items():
-                if player_socket.fileno() == -1:  # fileno() returns -1 if disconnected
-                    print(f"Player {player_nickname} disconnected.")
-                    del self.players[player_nickname]
-
             if self.validate_nickname(nickname):
                 self.players[nickname] = (client_sock, 0, False)
                 client_sock.sendall(b"Registration Completed Successfully\n")
@@ -47,6 +86,36 @@ class RacingServer:
                 print("Duplicated")
                 client_sock.sendall(b"Invalid nickname, please choose another one.\n")
                 client_sock.close()
+
+    def remove_disconnected_players(self):
+        while True:
+            players_updates = {}
+            for player_nickname, (player_socket, _, _) in self.players.items():
+                try:
+                    data = b"" + player_socket.recv(1024)
+                    if data:
+                        print("OKEE")
+                except socket.error:
+                    continue
+                except socket.timeout:
+                    continue
+                packet = list(self.read_packets(data))
+                deleted = False
+                for p_id, payload in packet:
+                    ## received hang
+                    if p_id == PACKET_HANG:
+                        print("DMDMDMDMDM")
+                        player_socket.close()
+                        if player_nickname in self.players.keys():
+                            try:
+                                deleted = True
+                            except KeyError:
+                                print("ALREADY DELETED")
+                        break
+                if not deleted:
+                    players_updates[player_nickname] = (player_socket, 0, False)
+            self.players = players_updates
+            time.sleep(1)  # Add a small delay to avoid high CPU usage
 
     def validate_nickname(self, nickname):
         # Check if nickname is already in use or if it's not alphanumeric or not within length limit
@@ -147,8 +216,13 @@ class RacingServer:
 
     def run(self):
         accept_thread = threading.Thread(target=self.accept_players)
-        accept_thread.start()
-        accept_thread.join()
+        remove_thread = threading.Thread(target=self.remove_disconnected_players)
 
-        self.start_game()
+        accept_thread.start()
+        remove_thread.start()
+
+        accept_thread.join()
+        remove_thread.join()
+
+        # self.start_game()
 

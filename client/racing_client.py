@@ -10,6 +10,7 @@ class RacingClient:
         self.port = port
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
+        self.sock.settimeout(5)
 
         self.last_ping_sent = 0
         self.last_ping_received = time.time()
@@ -21,7 +22,7 @@ class RacingClient:
         if len(self.buf) >= 4:
             packet_length = struct.unpack("I", self.buf[:4])[0]
 
-            ## whole packet is present
+            ## whole packet`1 is present
             if len(self.buf) >= packet_length + 4:
                 packet_buf = self.buf[:4 + packet_length]
 
@@ -93,9 +94,8 @@ class RacingClient:
             return
 
         try:
-            self.socket.sendall(buf)
+            self.sock.sendall(buf)
         except:
-            print(self._kind, "sending error, disconnecting")
             self.connected = False
 
     def ping(self):
@@ -115,6 +115,7 @@ class RacingClient:
     def _disconnect(self):
         if not self.connected:
             return
+        print("SOCKET DISCONNECTED")
 
         ## hack to make sure hang packet gets through
         self.sock.settimeout(20)
@@ -128,7 +129,7 @@ class RacingClient:
             return None
 
         try:
-            data = self.socket.recv(1024)
+            data = self.sock.recv(1024)
             if data:
                 self.buf += data
 
@@ -155,15 +156,14 @@ class RacingClient:
 
             ## received hang
             if p_id == PACKET_HANG:
-                print(self._kind, "hang")
-                self.socket.close()
+                self.sock.shutdown(socket.SHUT_RDWR)
+                self.sock.close()
                 self.connected = False
                 return
 
         ## check when last received ping
         if (time.time() - self.last_ping_received) > 10:
             ## server not responding, goodbye
-            print(self._kind, "not responding")
             self._disconnect()
 
         return packets

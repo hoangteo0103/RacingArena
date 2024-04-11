@@ -46,9 +46,7 @@ class JoinServerScreen:
 
         err_string = None
         try:
-            print("HEHEHR")
             self.client = RacingClient(ip, port)
-            print("GETHERRE")
             response = self.client.register(nick)
             print(response)
             if "Successfully" in response:
@@ -59,6 +57,7 @@ class JoinServerScreen:
 
         ## connection errors
         except Exception as e:
+            print(e)
             err_string = str(e)
         except ConnectionRefusedError:
             err_string = "Error: Connection refused!"

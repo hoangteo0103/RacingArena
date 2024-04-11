@@ -74,7 +74,6 @@ class RacingArenaClient:
         self.current_screen = self.create_server_screen
 
     def switch_to_join_server_screen(self):
-        print("DMDMDMDMDMDM")
         self.resetclient()
         self.join_server_screen = JoinServerScreen(self.screen, self.join_server_callback,
                                                        self.switch_to_menu_screen)
