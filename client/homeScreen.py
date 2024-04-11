@@ -18,7 +18,6 @@ class homeScreen():
         nameInputX, nameInputY = (self.screenWidth - nameInputWidth) / 2, (self.screenHeight - nameInputHeight) / 2
         self.nameInput = TextInputBox(nameInputX, nameInputY, nameInputWidth, nameInputHeight, pygame.font.Font(None, FONT_SIZE))
         self.name = ""
-
         self.loginButtonSize = (212, 50)
         self.loginButtonCoord = ((self.screenWidth - self.loginButtonSize[0]) / 2, nameInputY + 100)
         self.loginButton = Button(pygame.transform.scale(pygame.image.load("../assets/images/p2_login_here.png"), self.loginButtonSize),

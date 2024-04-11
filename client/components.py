@@ -139,7 +139,8 @@ class GuiButton:
                 self.hover = self.rect.collidepoint(event.pos)
             elif event.type == pygame.MOUSEBUTTONDOWN and self.hover:
                 self.pressed = True
-                self.callback()
+                if self.callback != None:
+                    self.callback()
 
 
 ENTRY_TYPE_TEXT = 0
