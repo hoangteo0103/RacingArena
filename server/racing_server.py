@@ -21,13 +21,24 @@ class RacingServer:
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
         self.sock.listen(5)
+        self.connected = True
+
+        self.last_ping_sent = 0
+        self.last_ping_received = time.time()
+
+        self.buf = b""
         print(f"Server running on {self.host}:{self.port}")
 
     def accept_players(self):
         while len(self.players) < self.max_players:
             client_sock, client_addr = self.sock.accept()
             nickname = client_sock.recv(1024).decode().strip()
-            print(nickname , client_addr)
+
+            for player_nickname, (player_socket, _, _) in self.players.items():
+                if player_socket.fileno() == -1:  # fileno() returns -1 if disconnected
+                    print(f"Player {player_nickname} disconnected.")
+                    del self.players[player_nickname]
+
             if self.validate_nickname(nickname):
                 self.players[nickname] = (client_sock, 0, False)
                 client_sock.sendall(b"Registration Completed Successfully\n")
@@ -37,11 +48,8 @@ class RacingServer:
                 client_sock.sendall(b"Invalid nickname, please choose another one.\n")
                 client_sock.close()
 
-            if nickname in self.players:
-                del self.players[nickname]
-                print(f"Player {nickname} disconnected.")
-
     def validate_nickname(self, nickname):
+        # Check if nickname is already in use or if it's not alphanumeric or not within length limit
         if nickname in self.players.keys() or not (0 < len(nickname) <= 10) or not nickname.isalnum():
             return False
         return True
