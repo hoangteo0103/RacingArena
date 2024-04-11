@@ -2,6 +2,10 @@ import pygame
 from pygame.locals import *
 from components import *
 from  constant import  *
+import socket
+
+from server.racing_server import RacingServer
+
 
 class CreateServerScreen:
     def __init__(self, screen, create_callback, back_callback):
@@ -23,27 +27,55 @@ class CreateServerScreen:
         place_y += 70  # Padding
 
         self.btn_entry_back = GuiButton((GUI_BTN_PAD, GUI_BTN_PAD), self.font.render("Back", True, (0, 0, 0)), min_w=120, callback=self.back_callback)
-
         self.entry_err_txt = None
+        self.menu_entry_focus = EntryFocusManager([self.entry_ip, self.entry_name])
+        self.server = None
 
+    def create_server(self):
+        ip = self.entry_ip.get()
+        port = 1337
+        if ":" in ip:
+            ip, port = ip.split(":")[0:2]
+            port = int(port)
+
+        nick = self.entry_name.get()
+
+        err_string = None
+        try:
+            self.server = RacingServer(ip, port)
+        ## connection errors
+        except ConnectionRefusedError:
+            err_string = "Error: Connection refused!"
+        except OSError as e:
+            print(e)
+            ## fuck errno.h
+            ## !!!!!
+            known_winerrors = {11001: "Error: Invalid address!",
+                               10048: "Error: Address already in use.",
+                               10049: "Error: Cannot bind/connect to this address.",
+                               10060: "Error: Timed out."}
+
+            if e.errno in known_winerrors:
+                err_string = known_winerrors[e.errno]
+            else:
+                err_string = "Invalid error :("
+        except socket.timeout:
+            err_string = "Error: Timed out!"
+        except socket.gaierror:
+            err_string = "Error: Invalid address!"
+
+        if not err_string is None:
+            self.entry_err_txt = FONT_ACCENT.render(err_string, True, (0, 0, 0))
     def handle_events(self, events):
         mouse_pos = pygame.mouse.get_pos()
 
-        create_pressed = self.btn_entry_create.update(events, mouse_pos)
-        back_pressed = self.btn_entry_back.update(events, mouse_pos)
+        self.btn_entry_create.update(events, mouse_pos)
+        self.btn_entry_back.update(events, mouse_pos)
 
-        if create_pressed:
-            # Implement create server functionality
-            ip = self.entry_ip.get()
-            name = self.entry_name.get()
-            print("Create Server with IP:", ip, "and Name:", name)
+        if self.btn_entry_create.pressed:
+            self.create_server()
 
-        if back_pressed:
-            self.back_callback()
-
-        self.entry_ip.update(events, mouse_pos)
-        self.entry_name.update(events, mouse_pos)
-
+        self.menu_entry_focus.update(events,mouse_pos)
         return True
 
     def draw(self):
@@ -51,6 +83,9 @@ class CreateServerScreen:
 
         title_text = self.font.render("Create Server", True, (0, 0, 0))
         self.screen.blit(title_text, (200, 20))
+        if not self.entry_err_txt is None:
+            self.screen.blit(self.entry_err_txt, center_horiz((WIDTH, HEIGHT), self.entry_err_txt.get_size(),
+                                                    self.btn_entry_create.pos[1] + self.btn_entry_create.rect.h + GUI_PAD))
 
         self.entry_ip.draw(self.screen)
         self.entry_name.draw(self.screen)

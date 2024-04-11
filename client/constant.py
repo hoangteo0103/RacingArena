@@ -2,6 +2,7 @@ import pygame
 import os
 
 ASSETS_DIR = "./assets/"
+GUI_PAD = 20
 GUI_BTN_PAD = 8
 GUI_BTN_OUTLINE_W = 3
 

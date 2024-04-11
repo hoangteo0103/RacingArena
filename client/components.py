@@ -146,7 +146,6 @@ ENTRY_TYPE_TEXT = 0
 ENTRY_TYPE_NUM = 1
 ENTRY_TYPE_IP = 2
 
-
 class GuiEntry:
     def __init__(self, pos, font, initial_text="", max_length=12, min_w=300, _type=ENTRY_TYPE_TEXT):
         self.pos = pos

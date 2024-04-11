@@ -24,7 +24,7 @@ class MenuScreen:
         self.screen.fill((255, 255, 255))
 
         title_text = self.font.render("Racing Arena Menu", True, (0, 0, 0))
-        self.screen.blit(title_text, (200, 100))
+        self.screen.blit(title_text, (270, 100))
 
         self.create_server_button.draw(self.screen)
         self.join_server_button.draw(self.screen)
