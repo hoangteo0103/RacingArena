@@ -5,7 +5,7 @@ from waiting_room_screen import WaitingRoomScreen
 from game_play_screen import GamePlayScreen
 from menu_screen import MenuScreen
 from create_server_screen import CreateServerScreen
-from join_server_screen import  JoinServerScreen
+from join_server_screen import JoinServerScreen
 import socket
 import threading
 
@@ -24,6 +24,8 @@ class RacingArenaClient:
 
         self.current_screen = None
         self.client = None
+        self.packet_thread = None
+        self.event_thread = None
 
     def create_server_callback(self):
         print("Create Server clicked")
@@ -32,7 +34,6 @@ class RacingArenaClient:
         print("Join Server clicked")
         self.client = client
         self.switch_to_waiting_room_screen()
-        # Implement join server functionality here
 
     def quit_callback(self):
         print("Quit clicked")
@@ -52,12 +53,24 @@ class RacingArenaClient:
 
         return True
 
+    def receive_packets(self):
+        if self.client == None:
+            return
+        while True:
+            packets = self.client.update()
+            self.current_screen.server_update(packets)
+
+    def switch_to_game_play_screen(self, client):
+        self.client = client
+        self.game_play_screen = GamePlayScreen(self.screen, client)
+        self.current_screen = self.game_play_screen
+
     def switch_to_registration_screen(self):
         self.registration_screen = RegistrationScreen(self.screen)
         self.current_screen = self.registration_screen
 
     def switch_to_waiting_room_screen(self):
-        self.waiting_room_screen = WaitingRoomScreen(self.screen, self.client,  self.switch_to_join_server_screen)
+        self.waiting_room_screen = WaitingRoomScreen(self.screen, self.client, self.switch_to_game_play_screen, self.switch_to_join_server_screen)
         self.current_screen = self.waiting_room_screen
 
     def switch_to_game_play_screen(self):
@@ -83,9 +96,15 @@ class RacingArenaClient:
         if self.client != None:
             self.client.disconnect()
             self.client = None
+
     def run(self):
         clock = pygame.time.Clock()
         self.switch_to_menu_screen()
+
+        # Start packet receiving thread
+        self.packet_thread = threading.Thread(target=self.receive_packets)
+        self.packet_thread.daemon = True
+        self.packet_thread.start()
 
         while True:
             if not self.handle_events():
@@ -97,6 +116,11 @@ class RacingArenaClient:
             pygame.display.flip()
             clock.tick(FPS)
 
+    def stop_threads(self):
+        if self.packet_thread:
+            self.packet_thread.join()
+
 if __name__ == "__main__":
     client = RacingArenaClient()
     client.run()
+    client.stop_threads()

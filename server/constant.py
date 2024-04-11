@@ -38,6 +38,7 @@ PACKET_MOVE = 8                 ## int8 from, int8 to
 PACKET_GAME_OUTCOME = 9         ## int8 termination, int8 winner
 PACKET_CLIENT_MOVE_INFO = 10    ## int8 from, int8 to               info for client to see what was moved
 PACKET_CLIENT_TAKEN_INFO = 11   ## int8 piece                       info for client to see what was taken
+PACKET_GAME_START = 12
 
 OUTCOME_RESIGNED = 11
 

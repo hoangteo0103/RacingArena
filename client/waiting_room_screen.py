@@ -4,11 +4,13 @@ from components import *
 from  constant import  *
 from menu_screen import *
 import socket
+from server.constant import *
 
 class WaitingRoomScreen:
-    def __init__(self, screen ,client, back_callback):
+    def __init__(self, screen ,client, gameplay_callback, back_callback):
         self.screen = screen
         self.client = client
+        self.gameplay_callback = gameplay_callback
         self.back_callback = back_callback
 
         self.font = FONT_ACCENT
@@ -22,6 +24,13 @@ class WaitingRoomScreen:
         self.btn_entry_back = GuiButton((GUI_BTN_PAD, GUI_BTN_PAD), self.font.render("Back", True, (0, 0, 0)), min_w=120, callback=self.back_callback)
 
         self.clock = pygame.time.Clock()
+
+    def server_update(self, packets):
+        for packet in packets:
+            pID, pDATA = packet
+
+            if pID == PACKET_GAME_START:
+                self.gameplay_callback(self.client)
 
     def handle_events(self, events):
         mouse_pos = pygame.mouse.get_pos()

@@ -106,7 +106,7 @@ class RacingClient:
 
     def disconnect(self):
         if not self.connected:
-            raise Exception("Client not connected!")
+            return
 
         self._disconnect()
 
