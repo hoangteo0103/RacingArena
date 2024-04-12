@@ -115,7 +115,7 @@ class GuiButton:
 
         self.normal_clr = normal_clr
         self.pressed_clr = pressed_clr
-
+        self.disabled = False
         self.set_pos(self.pos)
 
     def set_pos(self, pos):
@@ -129,6 +129,9 @@ class GuiButton:
         screen.blit(self.content, transform(center((self.rect.w, self.rect.h), (self.c_w, self.c_h)), self.pos))
 
     def update(self, events, mouse_pos):
+        if self.disabled:
+            return
+
         self.hover = False
         self.pressed = False
         if self.rect.collidepoint(mouse_pos):

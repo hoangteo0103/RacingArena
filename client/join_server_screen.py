@@ -46,7 +46,7 @@ class JoinServerScreen:
 
         err_string = None
         try:
-            self.client = RacingClient(ip, port)
+            self.client = RacingClient(ip, port, nick)
             response = self.client.register(nick)
             print(response)
             if "Successfully" in response:

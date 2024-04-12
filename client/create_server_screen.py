@@ -44,7 +44,7 @@ class CreateServerScreen:
 
         err_string = None
         try:
-            self.server = RacingServer(ip, port, MAX_PLAYERS , 26, 10)
+            self.server = RacingServer(ip, port, MAX_PLAYERS , 26, 20)
             self.server_thread = threading.Thread(target=self.server.run)
             self.server_thread.start()
         ## connection errors

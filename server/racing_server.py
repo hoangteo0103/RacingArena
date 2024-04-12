@@ -22,8 +22,8 @@ class RacingServer:
 
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.bind((self.host, self.port))
-        self.sock.listen(5)
-        self.sock.settimeout(20)
+        self.sock.listen(TIME_LIMIT)
+        self.sock.settimeout(TIME_LIMIT)
         self.connected = True
 
         self.last_ping_sent = 0
@@ -33,25 +33,27 @@ class RacingServer:
         print(f"Server running on {self.host}:{self.port}")
 
     def read_packets(self, data):
-        ## is an index present?
+        packets = []
+
+        # Check if an index is present
         if len(data) >= 4:
             packet_length = struct.unpack("I", data[:4])[0]
 
-            ## whole packet`1 is present
+            # Check if the whole packet is present
             if len(data) >= packet_length + 4:
                 packet_buf = data[:4 + packet_length]
 
-                ## read the packet: id, payload
+                # Read the packet: id, payload
                 packet = (packet_buf[4], packet_buf[5:])
-                print(packet)
+                packets.append(packet)
 
-            ## move the buffer
-            data = data[4 + packet_length:]
+                # Move the buffer
+                data =data[4 + packet_length:]
 
-            return [packet, *self.read_packets(data)]
+                # Continue reading recursively
+                packets.extend(self.read_packets(data))
 
-        else:
-            return []
+        return packets
 
     def is_socket_connected(self,sock: socket.socket):
         try:
@@ -79,7 +81,7 @@ class RacingServer:
 
             resp = self.validate_nickname(nickname)
             if resp == "":
-                self.players[nickname] = (client_sock, 0, False)
+                self.players[nickname] = (client_sock, 0, False , 0)
                 client_sock.sendall(b"Registration Completed Successfully")
                 print(f"Player {nickname} registered.")
             else:
@@ -89,23 +91,23 @@ class RacingServer:
                     client_sock.sendall(b"Nickname length must be shorter than 10, please enter again.")
 
                 client_sock.close()
-        time.sleep(1.5)
+        time.sleep(WAITING_FOR_INIT)
     def remove_disconnected_players(self):
         while True:
             players_updates = {}
             try:
-                for player_nickname, (player_socket, _, _) in self.players.items():
+                for player_nickname, (player_socket, point, status, lose_consecutive) in self.players.items():
                     if self.is_socket_connected(player_socket):
-                        players_updates[player_nickname] = (player_socket, 0, False)
+                        players_updates[player_nickname] = (player_socket, 0, False, lose_consecutive)
                     else:
-                        players_updates[player_nickname] = (player_socket, 0 , True)
+                        players_updates[player_nickname] = (player_socket, 0 , True, lose_consecutive)
                 self.players = players_updates
             except RuntimeError:
                 continue
     def send_waiting_room_info(self):
         while self.status == STATUS_WAITING_FOR_PLAYERS:
             player_names = []
-            for player_nickname, (player_socket, _, status) in self.players.items():
+            for player_nickname, (player_socket, _, status, _) in self.players.items():
                 if not status:
                     player_names.append(player_nickname)
             print("SENDING WAITING ROOM INFO", player_names)
@@ -115,7 +117,7 @@ class RacingServer:
     def validate_nickname(self, nickname):
         if not (0 < len(nickname) <= 10) or not nickname.isalnum():
             return "LEN"
-        for player_nickname, (player_socket, _, status) in self.players.items():
+        for player_nickname, (player_socket, _, status, _) in self.players.items():
             if nickname == player_nickname and not status:
                 return "DUP"
         return ""
@@ -163,12 +165,13 @@ class RacingServer:
         def handle_answer(nickname, player_info):
             nonlocal answers
             player_sock = player_info[0]
-            player_sock.settimeout(self.question_time_limit)
+            player_sock.settimeout(TIME_LIMIT)
             try:
-                answer = player_sock.recv(1024).decode().strip()
-                print("DB",nickname, answer)
-                answers[nickname] = answer
-            except socket.timeout:
+                data = player_sock.recv(1024)
+                answer = read_utf8_json(self.read_packets(data))
+                print(nickname, answer)
+                answers[nickname] = (answer , time.time() - start_time)
+            except:
                 answers[nickname] = None
 
         # Create a thread for each player to handle their answer
@@ -181,42 +184,37 @@ class RacingServer:
         for answer_thread in answer_threads:
             answer_thread.join()
 
+        # Find the fastest player and their time taken
+        min_time = float('inf')
+        for nickname in answers.keys():
+            if answers[nickname] is not None and answers[nickname][1] < min_time:
+                min_time = answers[nickname][1]
+
         end_time = time.time()
         time_taken = end_time - start_time
-
+        points = 0
         correct_answer = eval(question)
         fastest_player = None
         for nickname, answer in answers.items():
             player_info = self.players[nickname]
             player_sock = player_info[0]
-            points = 0
-            if answer is None or answer == "" or not answer.isdigit():
-                points = -1
-                player_info = (player_sock, player_info[1] + points, player_info[2])
+            if answer is None or answer[0] == "" or not answer.isdigit() or int(answer[0]) != correct_answer:
+                points += 1
+                player_info = (player_sock, max(1 , player_info[1] -1), player_info[2], player_info[3] + 1)
                 self.players[nickname] = player_info
-                if player_info[1] < -2:  # Disqualification condition
+                if player_info[3] == 3 :  # Disqualification condition
                     self.remaining_players -= 1
-                    player_info = (player_sock, player_info[1], True)
+                    player_info = (player_sock, -1, player_info[2], 0)
                     self.players[nickname] = player_info
-                    self.broadcast(f"{nickname} is disqualified!\n")
             elif int(answer) == correct_answer:
-                if fastest_player is None or time_taken < answers[fastest_player]:
-                    fastest_player = nickname
-                points = self.remaining_players if nickname == fastest_player else 1
-                player_info = (player_sock, player_info[1] + points, player_info[2])
+                player_info = (player_sock, player_info[1] + 1, player_info[2], 0)
                 self.players[nickname] = player_info
-            else:
-                points = -1
-                player_info = (player_sock, player_info[1] + points, player_info[2])
-                self.players[nickname] = player_info
-                if player_info[1] < -2:  # Disqualification condition
-                    self.remaining_players -= 1
-                    player_info = (player_sock, player_info[1], True)
-                    self.players[nickname] = player_info
-                    self.broadcast(f"{nickname} is disqualified!\n")
 
-        # self.broadcast_results()
+        for nickname in self.players.keys():
+            if answers[nickname]  is not None and answers[nickname][1] == min_time:
+                self.players[nickname][1] += points
 
+        self.broadcast_results()
         self.current_question += 1
         if self.current_question >= len(self.questions):
             self.finished = True
@@ -227,13 +225,15 @@ class RacingServer:
                 player_info[0].sendall(packet)
 
     def broadcast_results(self):
-        results = "Current Race Standings:\n"
-        sorted_players = sorted(self.players.items(), key=lambda x: x[1][1], reverse=True)
-        for i, (nickname, player_info) in enumerate(sorted_players):
-            position = max(self.start_position, i+1)
-            results += f"{position}. {nickname}: {player_info[1]} points\n"
-        self.broadcast(results)
-
+        result = []
+        for nickname, player_info in self.players.items():
+            if player_info[2]:
+                result.append(nickname + ":" + "Disconnected")
+            if player_info[1] == -1:
+                result.append(nickname + ":" + "Disqualified")
+            if player_info[1] >= 0 and not player_info[2]:
+                result.append(nickname + ":" + str(player_info[1]))
+        self.broadcast(make_packet_string(PACKET_GAME_RESULTS, result))
     def run(self):
         accept_thread = threading.Thread(target=self.accept_players)
         remove_thread = threading.Thread(target=self.remove_disconnected_players)

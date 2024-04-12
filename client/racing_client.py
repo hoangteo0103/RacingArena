@@ -5,12 +5,13 @@ import struct
 from server.constant import *
 
 class RacingClient:
-    def __init__(self, host, port):
+    def __init__(self, host, port, nickname):
         self.host = host
         self.port = port
+        self.nickname = nickname
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect((self.host, self.port))
-        self.sock.settimeout(5)
+        self.sock.settimeout(TIME_LIMIT)
 
         self.last_ping_sent = 0
         self.last_ping_received = time.time()
@@ -121,7 +122,7 @@ class RacingClient:
         print("SOCKET DISCONNECTED")
 
         ## hack to make sure hang packet gets through
-        self.sock.settimeout(20)
+        self.sock.settimeout(30)
         self._send(make_packet(PACKET_HANG, B_EMPTY))
         self.connected = False
 
