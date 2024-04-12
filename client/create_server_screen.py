@@ -4,8 +4,9 @@ from components import *
 from  constant import  *
 import socket
 import threading
-
+from server.constant import *
 from server.racing_server import RacingServer
+
 
 
 class CreateServerScreen:
@@ -43,7 +44,7 @@ class CreateServerScreen:
 
         err_string = None
         try:
-            self.server = RacingServer(ip, port, 5 , 26, 10)
+            self.server = RacingServer(ip, port, MAX_PLAYERS , 26, 10)
             self.server_thread = threading.Thread(target=self.server.run)
             self.server_thread.start()
         ## connection errors

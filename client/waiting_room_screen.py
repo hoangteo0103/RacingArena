@@ -1,3 +1,5 @@
+import time
+
 import pygame
 from pygame.locals import *
 from components import *
@@ -18,9 +20,7 @@ class WaitingRoomScreen:
         menu_entry_w = 500
         entry_x = (WIDTH - menu_entry_w) / 2
 
-        players = ["Player1", "Player2", "Player3", "Player4", "Player5",
-                   "Player6", "Player7", "Player8", "Player9", "Player10"]
-        self.players = players
+        self.players = []
         self.btn_entry_back = GuiButton((GUI_BTN_PAD, GUI_BTN_PAD), self.font.render("Back", True, (0, 0, 0)), min_w=120, callback=self.back_callback)
 
         self.clock = pygame.time.Clock()
@@ -28,9 +28,12 @@ class WaitingRoomScreen:
     def server_update(self, packets):
         for packet in packets:
             pID, pDATA = packet
-
             if pID == PACKET_GAME_START:
+                time.sleep(3)
                 self.gameplay_callback(self.client)
+            if pID == PACKET_PLAYERS_INFO:
+                self.players = read_utf8_json(pDATA)
+
 
     def handle_events(self, events):
         mouse_pos = pygame.mouse.get_pos()
@@ -43,7 +46,7 @@ class WaitingRoomScreen:
         self.screen.fill(WHITE)
 
         # Draw number of players
-        num_players_text = f"{len(self.players)}/{MAX_PLAYERS_PER_ROW}"
+        num_players_text = f"{len(self.players)}/{MAX_PLAYERS}"
         num_players_render = self.font.render(num_players_text, True, BLACK)
 
         self.screen.blit(num_players_render, (710, 10))

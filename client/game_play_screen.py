@@ -5,13 +5,13 @@ from pygame.locals import *
 from components import *
 from constant import *
 class GamePlayScreen:
-    def __init__(self, client):
+    def __init__(self, screen, client):
         self.client = client
+        self.screen = screen
 
         question = "What is 5 + 3?"
         leaderboard = "1. Player1: 10 points\n2. Player2: 8 points\n3. Player3: 5 points\n4. Player4: 2 points"
 
-        self.screen = pygame.display.set_mode((WIDTH, HEIGHT))
         self.question = question
         self.leaderboard = leaderboard
         self.answer = ""
@@ -47,6 +47,9 @@ class GamePlayScreen:
         self.timer_font = pygame.font.Font(None, 36)
         self.time_left = 60
         self.start_time = time.time()
+
+    def server_update(self, packets):
+        pass
 
 
     def handle_events(self, events):

@@ -1,7 +1,22 @@
 import struct
+import json
 
 UTIL_STATUS_HUMAN_READABLE = ["Waiting for opponent!", "Game", "Game ended!", "Opponent left!", "Server shutting down!", "Connection lost!"]
 
+def make_packet_string(_id, payload):
+    payload_json = json.dumps(payload)  # Convert the payload list to a JSON string
+    payload_bytes = payload_json.encode('utf-8')  # Encode the JSON string to bytes
+
+    b = bytes([_id]) + payload_bytes
+
+    return struct.pack("I", len(b)) + b
+
+def read_utf8_json(buf):
+    payload_json = buf.decode('utf-8')
+
+    # Decode the JSON string back to a list
+    payload_list = json.loads(payload_json)
+    return payload_list
 def write_utf8_string(string):
     buf = string.encode("utf-8")
 
@@ -28,19 +43,13 @@ STATUS_SERVER_STOPPED = 4
 B_EMPTY = b""
 PACKET_PING = 0
 PACKET_HANG = 1
-PACKET_STATUS = 2               ## int8 status
-PACKET_SET_NICK = 3             ## utf8_string nick
-PACKET_PLAYER_INFO = 4          ## int8 idx, utf8_string nick
-PACKET_SIDE = 5                 ## int8 side
-PACKET_BOARD = 6                ## int8 is_capture utf8_string board_epd
-PACKET_GIVE_UP = 7              ## give up
-PACKET_MOVE = 8                 ## int8 from, int8 to
-PACKET_GAME_OUTCOME = 9         ## int8 termination, int8 winner
-PACKET_CLIENT_MOVE_INFO = 10    ## int8 from, int8 to               info for client to see what was moved
-PACKET_CLIENT_TAKEN_INFO = 11   ## int8 piece                       info for client to see what was taken
-PACKET_GAME_START = 12
+PACKET_STATUS = 2
+PACKET_SET_NICK = 3
+PACKET_PLAYERS_INFO = 4
+PACKET_GAME_START = 5
 
-OUTCOME_RESIGNED = 11
+OUTCOME_RESIGNED = 6
 
+## GAME CONFIG
 
-
+MAX_PLAYERS = 2

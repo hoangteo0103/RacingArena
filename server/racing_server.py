@@ -28,7 +28,7 @@ class RacingServer:
 
         self.last_ping_sent = 0
         self.last_ping_received = time.time()
-
+        self.status = STATUS_WAITING_FOR_PLAYERS
         self.buf = b""
         print(f"Server running on {self.host}:{self.port}")
 
@@ -55,28 +55,26 @@ class RacingServer:
 
     def is_socket_connected(self,sock: socket.socket):
         try:
-            # Set the socket to non-blocking mode
-            sock.setblocking(False)
-
-            # Peek into the socket to check for data
-            data = sock.recv(1, socket.MSG_PEEK)
-
-            # If the data is an empty byte string, the socket is not connected
-            return False if data == b'' else True
-        except BlockingIOError:
-            # If the operation will block, set the socket back to blocking mode
-            sock.setblocking(True)
-            return True
-        except (ConnectionResetError, ConnectionError, ConnectionAbortedError):
-            # Handle specific connection-related errors
+            data = b"" + sock.recv(1024)
+        except socket.error:
             return False
-        finally:
-            # Always set the socket back to blocking mode before returning
-            sock.setblocking(True)
+        except socket.timeout:
+            return False
+
+        packet = list(self.read_packets(data))
+        for p_id, payload in packet:
+            ## received hang
+            if p_id == PACKET_HANG:
+                sock.close()
+                return False
+        return True
 
     def accept_players(self):
-        while True:
-            client_sock, client_addr = self.sock.accept()
+        while len(self.players) < self.max_players:
+            try:
+                client_sock, client_addr = self.sock.accept()
+            except socket.timeout:
+                continue
             nickname = client_sock.recv(1024).decode().strip()
             if self.validate_nickname(nickname):
                 self.players[nickname] = (client_sock, 0, False)
@@ -90,41 +88,38 @@ class RacingServer:
     def remove_disconnected_players(self):
         while True:
             players_updates = {}
-            for player_nickname, (player_socket, _, _) in self.players.items():
-                try:
-                    data = b"" + player_socket.recv(1024)
-                    if data:
-                        print("OKEE")
-                except socket.error:
-                    continue
-                except socket.timeout:
-                    continue
-                packet = list(self.read_packets(data))
-                deleted = False
-                for p_id, payload in packet:
-                    ## received hang
-                    if p_id == PACKET_HANG:
-                        print("DMDMDMDMDM")
-                        player_socket.close()
-                        if player_nickname in self.players.keys():
-                            try:
-                                deleted = True
-                            except KeyError:
-                                print("ALREADY DELETED")
-                        break
-                if not deleted:
-                    players_updates[player_nickname] = (player_socket, 0, False)
-            self.players = players_updates
-            time.sleep(1)  # Add a small delay to avoid high CPU usage
-
+            try:
+                for player_nickname, (player_socket, _, _) in self.players.items():
+                    if self.is_socket_connected(player_socket):
+                        players_updates[player_nickname] = (player_socket, 0, False)
+                    else:
+                        players_updates[player_nickname] = (player_socket, 0 , True)
+                self.players = players_updates
+            except RuntimeError:
+                continue
+    def send_waiting_room_info(self):
+        while self.status == STATUS_WAITING_FOR_PLAYERS:
+            player_names = []
+            for player_nickname, (player_socket, _, status) in self.players.items():
+                if not status:
+                    player_names.append(player_nickname)
+            print("SENDING WAITING ROOM INFO", player_names)
+            players = self.players
+            for player_nickname, (player_socket, _, status) in players.copy().items():
+                if not status:
+                    player_socket.send(make_packet_string(PACKET_PLAYERS_INFO, player_names))
+            time.sleep(0.5)
     def validate_nickname(self, nickname):
-        # Check if nickname is already in use or if it's not alphanumeric or not within length limit
-        if nickname in self.players.keys() or not (0 < len(nickname) <= 10) or not nickname.isalnum():
+        if not (0 < len(nickname) <= 10) or not nickname.isalnum():
             return False
+        for player_nickname, (player_socket, _, status) in self.players.items():
+            if nickname == player_nickname and not status:
+                return False
         return True
 
     def start_game(self):
         print("Starting the game...")
+        self.status = STATUS_PLAYING
         self.remaining_players = len(self.players)
         self.send_race_info()
         self.generate_questions()
@@ -133,9 +128,11 @@ class RacingServer:
         print("Game finished.")
 
     def send_race_info(self):
+        player_names = []
+        for player_name in self.players.keys():
+            player_names.append(player_name)
         for player in self.players.values():
-            player[0].sendall(f"Race Length: {self.race_length}\n".encode())
-            player[0].sendall(f"Start Position: {self.start_position}\n".encode())
+            player[0].sendall(make_packet_string(PACKET_GAME_START, player_names))
 
     def generate_questions(self):
         for _ in range(self.race_length):
@@ -217,12 +214,16 @@ class RacingServer:
     def run(self):
         accept_thread = threading.Thread(target=self.accept_players)
         remove_thread = threading.Thread(target=self.remove_disconnected_players)
+        send_waiting_room_info_thread = threading.Thread(target=self.send_waiting_room_info)
+
+        remove_thread.daemon = True
+        send_waiting_room_info_thread.daemon = True
 
         accept_thread.start()
         remove_thread.start()
+        send_waiting_room_info_thread.start()
 
         accept_thread.join()
-        remove_thread.join()
 
-        # self.start_game()
+        self.start_game()
 

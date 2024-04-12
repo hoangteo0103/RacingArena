@@ -54,9 +54,9 @@ class RacingArenaClient:
         return True
 
     def receive_packets(self):
-        if self.client == None:
-            return
         while True:
+            if self.client is None:
+                continue
             packets = self.client.update()
             self.current_screen.server_update(packets)
 
@@ -65,17 +65,9 @@ class RacingArenaClient:
         self.game_play_screen = GamePlayScreen(self.screen, client)
         self.current_screen = self.game_play_screen
 
-    def switch_to_registration_screen(self):
-        self.registration_screen = RegistrationScreen(self.screen)
-        self.current_screen = self.registration_screen
-
     def switch_to_waiting_room_screen(self):
         self.waiting_room_screen = WaitingRoomScreen(self.screen, self.client, self.switch_to_game_play_screen, self.switch_to_join_server_screen)
         self.current_screen = self.waiting_room_screen
-
-    def switch_to_game_play_screen(self):
-        self.game_play_screen = GamePlayScreen(self.screen)
-        self.current_screen = self.game_play_screen
 
     def switch_to_menu_screen(self):
         self.menu_screen = MenuScreen(self.screen, self.switch_to_join_server_screen, self.switch_to_create_server_screen, self.quit_callback)

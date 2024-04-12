@@ -18,25 +18,28 @@ class RacingClient:
         self.connected = True
 
     def read_packets(self):
-        ## is an index present?
+        packets = []
+
+        # Check if an index is present
         if len(self.buf) >= 4:
             packet_length = struct.unpack("I", self.buf[:4])[0]
 
-            ## whole packet`1 is present
+            # Check if the whole packet is present
             if len(self.buf) >= packet_length + 4:
                 packet_buf = self.buf[:4 + packet_length]
 
-                ## read the packet: id, payload
+                # Read the packet: id, payload
                 packet = (packet_buf[4], packet_buf[5:])
-                print(packet)
+                packets.append(packet)
 
-            ## move the buffer
-            self.buf = self.buf[4 + packet_length:]
+                # Move the buffer
+                self.buf = self.buf[4 + packet_length:]
 
-            return [packet, *self.read_packets()]
+                # Continue reading recursively
+                packets.extend(self.read_packets())
 
-        else:
-            return []
+        return packets
+
     def register(self, nickname):
         self.sock.sendall(nickname.encode())
         print("NOT RESPONDING HERE")
@@ -142,9 +145,8 @@ class RacingClient:
 
         ## internal handling
         ## sending ping
-        if (time.time() - self.last_ping_sent) > 5:
-            ##print(self._kind, "pinging")
-            self.ping()
+
+        self.ping()
 
         ## iterate packets (only internal packets are handled)
         for p_id, payload in packets:
@@ -160,10 +162,5 @@ class RacingClient:
                 self.sock.close()
                 self.connected = False
                 return
-
-        ## check when last received ping
-        if (time.time() - self.last_ping_received) > 10:
-            ## server not responding, goodbye
-            self._disconnect()
 
         return packets
