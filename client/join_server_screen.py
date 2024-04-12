@@ -80,7 +80,7 @@ class JoinServerScreen:
             err_string = "Error: Invalid address!"
         print(err_string)
         if not err_string is None:
-            self.entry_err_txt = FONT_ACCENT.render(err_string, True, (0, 0, 0))
+            self.entry_err_txt = FONT_LABEL.render(err_string, True, (0, 0, 0))
     def handle_events(self, events):
         mouse_pos = pygame.mouse.get_pos()
 

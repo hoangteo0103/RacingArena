@@ -76,15 +76,20 @@ class RacingServer:
             except socket.timeout:
                 continue
             nickname = client_sock.recv(1024).decode().strip()
-            if self.validate_nickname(nickname):
+
+            resp = self.validate_nickname(nickname)
+            if resp == "":
                 self.players[nickname] = (client_sock, 0, False)
-                client_sock.sendall(b"Registration Completed Successfully\n")
+                client_sock.sendall(b"Registration Completed Successfully")
                 print(f"Player {nickname} registered.")
             else:
-                print("Duplicated")
-                client_sock.sendall(b"Invalid nickname, please choose another one.\n")
-                client_sock.close()
+                if resp == "DUP":
+                    client_sock.sendall(b"Duplicated nickname, please choose another one.")
+                if resp == "LEN":
+                    client_sock.sendall(b"Nickname length must be shorter than 10, please enter again.")
 
+                client_sock.close()
+        time.sleep(1.5)
     def remove_disconnected_players(self):
         while True:
             players_updates = {}
@@ -105,17 +110,15 @@ class RacingServer:
                     player_names.append(player_nickname)
             print("SENDING WAITING ROOM INFO", player_names)
             players = self.players
-            for player_nickname, (player_socket, _, status) in players.copy().items():
-                if not status:
-                    player_socket.send(make_packet_string(PACKET_PLAYERS_INFO, player_names))
+            self.broadcast(make_packet_string(PACKET_PLAYERS_INFO, player_names))
             time.sleep(0.5)
     def validate_nickname(self, nickname):
         if not (0 < len(nickname) <= 10) or not nickname.isalnum():
-            return False
+            return "LEN"
         for player_nickname, (player_socket, _, status) in self.players.items():
             if nickname == player_nickname and not status:
-                return False
-        return True
+                return "DUP"
+        return ""
 
     def start_game(self):
         print("Starting the game...")
@@ -129,10 +132,10 @@ class RacingServer:
 
     def send_race_info(self):
         player_names = []
-        for player_name in self.players.keys():
-            player_names.append(player_name)
         for player in self.players.values():
-            player[0].sendall(make_packet_string(PACKET_GAME_START, player_names))
+            if player[2]:
+                player_names.append(player[0])
+        self.broadcast(make_packet_string(PACKET_GAME_START, player_names))
 
     def generate_questions(self):
         for _ in range(self.race_length):
@@ -143,21 +146,40 @@ class RacingServer:
             self.questions.append(question)
 
     def play_round(self):
-        self.broadcast("New round! Get ready for the next question.\n")
+        self.broadcast(make_packet(PACKET_GAME_WAITING_FOR_NEXT_ROUND, B_EMPTY))
+
+        time.sleep(5)
+        self.broadcast(make_packet(PACKET_GAME_NEWROUND, B_EMPTY))
         question = self.questions[self.current_question]
-        self.broadcast(f"Question: {question}\n")
+        self.broadcast(make_packet_string(PACKET_GAME_QUESTION, [question]))
 
         answers = {}
         start_time = time.time()
-        for nickname, player_info in self.players.items():
+
+        # Create a list to store threads
+        answer_threads = []
+
+        # Define a function to handle player answer
+        def handle_answer(nickname, player_info):
+            nonlocal answers
             player_sock = player_info[0]
             player_sock.settimeout(self.question_time_limit)
             try:
-                player_sock.sendall(b"Please submit your answer: ")
                 answer = player_sock.recv(1024).decode().strip()
+                print("DB",nickname, answer)
                 answers[nickname] = answer
             except socket.timeout:
                 answers[nickname] = None
+
+        # Create a thread for each player to handle their answer
+        for nickname, player_info in self.players.items():
+            answer_thread = threading.Thread(target=handle_answer, args=(nickname, player_info))
+            answer_thread.start()
+            answer_threads.append(answer_thread)
+
+        # Wait for all threads to complete
+        for answer_thread in answer_threads:
+            answer_thread.join()
 
         end_time = time.time()
         time_taken = end_time - start_time
@@ -193,15 +215,16 @@ class RacingServer:
                     self.players[nickname] = player_info
                     self.broadcast(f"{nickname} is disqualified!\n")
 
-        self.broadcast_results()
+        # self.broadcast_results()
 
         self.current_question += 1
         if self.current_question >= len(self.questions):
             self.finished = True
 
-    def broadcast(self, message):
+    def broadcast(self, packet):
         for player_info in self.players.values():
-            player_info[0].sendall(message.encode())
+            if not player_info[2]:
+                player_info[0].sendall(packet)
 
     def broadcast_results(self):
         results = "Current Race Standings:\n"

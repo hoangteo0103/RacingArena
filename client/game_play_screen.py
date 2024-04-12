@@ -4,6 +4,7 @@ import time
 from pygame.locals import *
 from components import *
 from constant import *
+from server.constant import *
 class GamePlayScreen:
     def __init__(self, screen, client):
         self.client = client
@@ -42,20 +43,33 @@ class GamePlayScreen:
         submit_button_x = self.input_box_x + 350
         submit_button_y = self.input_box_y
 
-        self.submit_button = GuiButton((submit_button_x, submit_button_y), self.font.render("Submit", True, (0, 0, 0)), min_w=100)
+        self.submit_button = GuiButton((submit_button_x, submit_button_y), self.font.render("Submit", True, (0, 0, 0)), min_w=100, callback=self.submit_answer)
 
-        self.timer_font = pygame.font.Font(None, 36)
         self.time_left = 60
-        self.start_time = time.time()
+        self.start_time = 0
+        self.timer_text = "HAHA"
+
+    def submit_answer(self):
+        answer = self.entry_answer.get()
+        self.client.send(make_packet(PACKET_GAME_ANSWER, bytes([int(answer)])))
 
     def server_update(self, packets):
-        pass
+        for packet in packets:
+            pID, pDATA = packet
+            if pID == PACKET_GAME_WAITING_FOR_NEXT_ROUND:
+                self.start_time = 0
+                self.timer_text = "WAITING FOR NEW ROUND"
+                self.question = ""
+            if pID == PACKET_GAME_QUESTION:
+                self.start_time = time.time()
+                self.question = "Question: " + read_utf8_json(pDATA)[0]
 
 
     def handle_events(self, events):
         mouse_pos = pygame.mouse.get_pos()
         self.submit_button.update(events,mouse_pos)
         self.menu_entry_focus.update(events,mouse_pos)
+
         return True
 
     def draw(self):
@@ -65,15 +79,15 @@ class GamePlayScreen:
 
         # Draw countdown timer
         self.time_left = max(0, 60 - int(time.time() - self.start_time))
-        timer_text = f"Time Left: {self.time_left} seconds"
-        timer_surface = self.timer_font.render(timer_text, True, BLACK)
+        if self.start_time != 0:
+            self.timer_text = "Time left: " + str(self.time_left) + " seconds"
+        timer_surface = FONT_ACCENT.render(self.timer_text, True, BLACK)
         timer_rect = timer_surface.get_rect(center=(WIDTH // 2, 40))
         self.screen.blit(timer_surface, timer_rect)
 
         # Draw question board
         pygame.draw.rect(self.screen, BLACK, (self.board_x, self.board_y, self.board_width, self.board_height), 2)
-        font = pygame.font.Font(None, 32)
-        text_surface = font.render("Question: " + self.question, True, BLACK)
+        text_surface = FONT_ACCENT.render(self.question, True, BLACK)
         self.screen.blit(text_surface, (self.board_x + 10, self.board_y + 10))
 
         # Draw leaderboard
